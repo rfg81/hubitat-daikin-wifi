@@ -1,7 +1,21 @@
 /**
- *  Daikin WiFi Split System
- *  V 1.4.1 - 11/12/2018
+ *  Daikin WiFi Split System Hubitat
+ *  V 1.0 - 2020-10-19
  *
+ *  This is a port of the Smartthings daikin ac controller code by Ben Dews, the code is
+ *  based on the modifications made by https://community.hubitat.com/u/tsaaek in this thread:
+ *  https://community.hubitat.com/t/a-c-control-daikin-mobile-controller/38911/28
+ *
+ *  I added a few energy reports from /aircon/get_year_power_ex and /aircon/get_week_power_ex: 
+ *  today, yesterday, this year, last year and last 12 months
+ *  
+ *  There is more information about the DAikin API in the repo this file came from, see daikinapi.md
+ *
+ *  
+ *  Here is some legal mumbo-jumbo everyone that throws a piece of code on the internet is 
+ *  overly fond of including, even though noone actually gives a crap as long as their 
+ *  stuff works:
+ * ============================================================================================
  *  Copyright 2018 Ben Dews - https://bendews.com
  *  Contribution by RBoy Apps
  *
@@ -22,16 +36,16 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
- *	
+ * ============================================================================================
+ *  
+ *  Ok, with that out of the way, do whatever the hell you want with this code as far as I'm concerned.
+ *  I take no responsibility for anything that happens if you use this code.
+ *  /Erik
  *
  *	Changelog:
  *
- *  1.0     (06/01/2018) - Initial 1.0 Release. All Temperature, Mode and Fan functions working.
- *  1.1     (06/01/2018) - Allow user to change device icon.
- *  1.2     (07/01/2018) - Fixed issue preventing user from setting desired temperature, added switch and temperature capabilities
- *  1.3     (10/01/2018) - Added support for outside temperature value, 1 minute refresh option (not reccomended) and fixed thermostat and switch state reporting when turned off
- *  1.4     (07/06/2018) - Added Fahrenheit support
- *  1.4.1   (11/12/2018) - Implemented fix for B-type adapters ('Host' header case) - Big thanks to @WGentine in the SmartThings community
+ *  1.0     (2020-10-19) - Initial 1.0 Release. Forked from SmartThings Daikin WiFi Split System and added 
+ *                         energy reports for today, yesterday, this year, last year and last 12 months.
  *
  */
 
@@ -66,7 +80,7 @@ import groovy.transform.Field
 ]
 
 metadata {
-    definition (name: "Daikin WiFi Split System", namespace: "bendews", author: "contact@bendews.com") {
+    definition (name: "Daikin WiFi Split System Hubitat", namespace: "bendews", author: "contact@bendews.com") {
         capability "Thermostat"
         capability "Temperature Measurement"
         capability "Actuator"
@@ -83,7 +97,12 @@ metadata {
         attribute "fanDirection", "string"
         attribute "statusText", "string"
         attribute "connection", "string"
-
+        attribute "energyToday", "number"
+        attribute "energyYesterday", "number"
+        attribute "energyThisYear", "number"
+        attribute "energyLastYear", "number"
+        attribute "energy12Months", "number"
+        
         command "fan"
         command "dry"
         command "tempUp"
@@ -104,147 +123,6 @@ metadata {
         input("displayFahrenheit", "boolean", title: "Display Fahrenheit", defaultValue: false, displayDuringSetup:true)
     }
 
-    simulator {
-        // TODO: define status and reply messages here
-    }
-
-    tiles(scale:2) {
-
-        // Main Tile
-        multiAttributeTile(name:"thermostatGeneric", type:"generic", width:6, height:4, canChangeIcon: true) {
-            tileAttribute("device.temperature", key: "PRIMARY_CONTROL") {
-                attributeState("temp", label:'${currentValue}°', unit:"dF", defaultState: true, backgroundColors: [
-                // Celsius
-                [value: 0, color: "#153591"],
-                [value: 7, color: "#1e9cbb"],
-                [value: 15, color: "#90d2a7"],
-                [value: 23, color: "#44b621"],
-                [value: 28, color: "#f1d801"],
-                [value: 35, color: "#d04e00"],
-                [value: 37, color: "#bc2323"],
-                // Fahrenheit
-				[value: 40, color: "#153591"],
-				[value: 44, color: "#1e9cbb"],
-				[value: 59, color: "#90d2a7"],
-				[value: 74, color: "#44b621"],
-				[value: 82, color: "#f1d801"],
-				[value: 95, color: "#d04e00"],
-				[value: 98, color: "#bc2323"]
-                ])
-            }
-
-            tileAttribute("device.statusText", key: "SECONDARY_CONTROL") {
-                attributeState("default", icon: "https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/temp-gauge.png", label:'${currentValue}', defaultState: true)
-            }
-
-            tileAttribute("device.targetTemp", key: "SLIDER_CONTROL", range:"(10..40)") {
-                attributeState "level", action:"setTemperature", defaultState: true
-            }
-        }
-
-        // Fan Rate controls
-        valueTile("fanRateText", "device.fanRate",width: 3, height: 1) {
-            state "val", label:'Fan Rate: ${currentValue}', defaultState: true
-        }
-        controlTile("fanRateSlider", "device.fanRate", "slider", height: 1, width: 1, range:"(1..5)") {
-            state "level", action:"setFanRate"
-        }
-        standardTile("fanRateAuto", "device.fanRate", width:1, height:1) {
-            state "default", label:'Auto', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-auto.png", backgroundColor:"#FFFFFF", action:"fanRateAuto", defaultState:true
-            state "Auto", label:'Auto', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-auto.png", backgroundColor:"#00A0DC", action:"fanRateAuto"
-        }
-        standardTile("fanRateSilence", "device.fanRate", width:1, height:1) {
-            state "default", label:'Silence', icon:"st.samsung.da.RAC_ic_silence", backgroundColor:"#FFFFFF", action:"fanRateSilence", defaultState:true
-            state "Silence", label:'Silence', icon:"st.samsung.da.RAC_ic_silence", backgroundColor:"#00A0DC", action:"fanRateSilence"
-        }
-        
-        // Fan Direction controls
-        valueTile("fanDirectionText", "device.fanDirection",width: 4, height: 1) {
-            state "val", label:'Fan Direction: ${currentValue}', defaultState: true
-        }
-        standardTile("fanDirectionVertical", "device.fanDirection", width:1, height:1) {
-            state "default", label:'Vertical', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-vertical.png", backgroundColor:"#FFFFFF", action:"fanDirectionVertical", defaultState:true
-            state "Vertical", label:'Vertical', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-vertical.png", backgroundColor:"#00A0DC", action:"fanDirectionVertical"
-            state "3D", label:'Vertical', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-vertical.png", backgroundColor:"#00A0DC", action:"fanDirectionVertical"
-        }
-        standardTile("fanDirectionHorizontal", "device.fanDirection", width:1, height:1) {
-            state "default", label:'Horizontal', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-horizontal.png", backgroundColor:"#FFFFFF", action:"fanDirectionHorizontal", defaultState:true
-            state "Horizontal", label:'Horizontal', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-horizontal.png", backgroundColor:"#00A0DC", action:"fanDirectionHorizontal"
-            state "3D", label:'Horizontal', icon:"https://cdn.rawgit.com/bendews/smartthings-daikin-wifi/master/icons/fan-horizontal.png", backgroundColor:"#00A0DC", action:"fanDirectionHorizontal"
-        }  
-
-        // Mode Toggles
-        standardTile("modeHeat", "device.thermostatMode", width:2, height:2) {
-            state "default", label:'Heat', icon:"st.Weather.weather14", backgroundColor:"#FFFFFF", action:"thermostat.heat", defaultState:true
-            state "heat", label:'Heat', icon:"st.Weather.weather14", backgroundColor:"#E86D13", action:"thermostat.off"
-        }
-
-        standardTile("modeCool", "device.thermostatMode", width:2, height:2) {
-            state "default", label:'Cool', icon:"st.Weather.weather7", backgroundColor:"#FFFFFF", action:"thermostat.cool", defaultState:true
-            state "cool", label:'Cool', icon:"st.Weather.weather7", backgroundColor:"#00A0DC", action:"thermostat.off"
-        }
-
-        standardTile("modeAuto", "device.thermostatMode", width:2, height:2) {
-            state "default", label:'Auto', icon:"st.tesla.tesla-hvac", backgroundColor:"#FFFFFF", action:"thermostat.auto", defaultState:true
-            state "auto", label:'Auto', icon:"st.tesla.tesla-hvac", backgroundColor:"#F1D801", action:"thermostat.off"
-        }
-        
-        standardTile("modeDry", "device.thermostatMode", width:2, height:2) {
-            state "default", label:'Dry', icon:"st.Weather.weather12", backgroundColor:"#FFFFFF", action:"dry", defaultState:true
-            state "dry", label:'Dry', icon:"st.Weather.weather12", backgroundColor:"#00A0DC", action:"thermostat.off"
-        }
-
-        standardTile("modeFan", "device.thermostatMode", width:2, height:2) {
-            state "default", label:'Fan', icon:"st.Appliances.appliances11", backgroundColor:"#FFFFFF", action:"fan", defaultState:true
-            state "fan", label:'Fan', icon:"st.Appliances.appliances11", backgroundColor:"#00A0DC", action:"thermostat.off"
-        }
-
-        // Outside Temp
-        valueTile("outsideTemp", "device.outsideTemp", width:2, height:2, inactiveLabel: false) {
-            state("val", label:'Outside: ${currentValue}°', backgroundColors:[
-                // Celsius
-                [value: 0, color: "#153591"],
-                [value: 7, color: "#1e9cbb"],
-                [value: 15, color: "#90d2a7"],
-                [value: 23, color: "#44b621"],
-                [value: 28, color: "#f1d801"],
-                [value: 35, color: "#d04e00"],
-                [value: 37, color: "#bc2323"],
-                // Fahrenheit
-				[value: 40, color: "#153591"],
-				[value: 44, color: "#1e9cbb"],
-				[value: 59, color: "#90d2a7"],
-				[value: 74, color: "#44b621"],
-				[value: 82, color: "#f1d801"],
-				[value: 95, color: "#d04e00"],
-				[value: 98, color: "#bc2323"]
-                ])
-        }
-
-        // Refresh       
-        standardTile("refresh", "device.refresh", inactiveLabel: false, decoration: "flat", width:2, height:2) {
-            state "default", action:"refresh.refresh", icon:"st.secondary.refresh"
-        }  
-
-
-        main("thermostatGeneric")
-        details([
-            "thermostatGeneric",
-            "fanRateText",
-            "fanRateSlider",
-            "fanRateAuto",
-            "fanRateSilence",
-            "fanDirectionText",
-            "fanDirectionVertical",
-            "fanDirectionHorizontal",
-            "modeHeat",
-            "modeCool",
-            "modeAuto",
-            "modeFan",
-            "modeDry",
-            "outsideTemp",
-            "refresh"])
-    }
 }
 
 // Generic Private Functions -------
@@ -266,7 +144,7 @@ private apiGet(def apiCommand) {
     log.debug "Executing hubaction on " + getHostAddress() + apiCommand
     sendEvent(name: "hubactionMode", value: "local")
 
-    def hubAction = new physicalgraph.device.HubAction(
+    def hubAction = new hubitat.device.HubAction(
         method: "GET",
         path: apiCommand,
         headers: [Host:getHostAddress()]
@@ -290,10 +168,6 @@ private convertTemp(Double temp, Boolean isFahrenheit){
     return convertedTemp.round()
 }
 
-private delayAction(long time) {
-    log.debug "Delay for '${time}'"
-    new physicalgraph.device.HubAction("delay $time")
-}
 // -------
 
 
@@ -359,7 +233,7 @@ private updateDaikinDevice(Boolean turnOff = false){
     }
     if (currentModeKey.isNumber()){
         // Set desired mode in HTTP call
-        mode = "&mode=${currentModeKey}"
+        mode = "&mode=${currentModeKey}"  
     }
     if (targetTemp){
         // Set desired Target Temperature in HTTP call
@@ -377,12 +251,18 @@ private updateDaikinDevice(Boolean turnOff = false){
     def apiCalls = [
         // Send HTTP Call to update device
         apiGet("/aircon/set_control_info"+pow+mode+sTemp+fRate+fDir+"&shum=0"),
-        delayAction(500),
+        						    
         // Get mode info
-        apiGet("/aircon/get_control_info"),
-        delayAction(500),
+	runIn(2, 'apiGet', [overwrite: false, data : "/aircon/get_control_info"]),
+        
         // Get temperature info
-        apiGet("/aircon/get_sensor_info")
+	runIn(4, 'apiGet', [overwrite: false, data : "/aircon/get_sensor_info"]),
+        
+    // Get power info, prev 2 weeks
+	runIn(6, 'apiGet', [overwrite: false, data : "/aircon/get_week_power_ex"]),
+        
+    // Get power info, this year & last year
+    runIn(8, 'apiGet', [overwrite : false, data : "/aircon/get_year_power_ex"])
     ]
     return apiCalls
 }
@@ -421,8 +301,8 @@ def updated() {
         // Unschedule existing tasks
         unschedule()
         // Set DNI
-        runIn(1, setDNI)
-        runIn(5, refresh)
+	    runIn(1, 'setDNI',  [overwrite : false])
+        runIn(5, 'refresh')
         // Start scheduled task
         startScheduledRefresh()
     }
@@ -436,12 +316,13 @@ def poll() {
 
 def refresh() {
     log.debug "Refreshing"
-    def apiCalls = [
-        sendHubCommand(apiGet("/aircon/get_sensor_info")),
-        sendHubCommand(delayAction(500)),
-        sendHubCommand(apiGet("/aircon/get_control_info"))
-        ]
-    return apiCalls
+	runIn(2, 'apiGet', [data:"/aircon/get_sensor_info"])
+    
+    runIn(4, 'apiGet', [overwrite : false, data : "/aircon/get_control_info"])
+
+    runIn(6, 'apiGet', [overwrite : false, data : "/aircon/get_week_power_ex"])
+    
+    runIn(8, 'apiGet', [overwrite : false, data : "/aircon/get_year_power_ex"])
 }
 
 def installed() {
@@ -458,6 +339,11 @@ def installed() {
     sendEvent(name:'fanRate', value: null, displayed:false)
     sendEvent(name:'fanDirection', value: null, displayed:false)
     sendEvent(name:'fanState', value: null, displayed:false)
+    sendEvent(name:'energyToday', value: null, displayed:false)
+    sendEvent(name:'energyYesterday', value: null, displayed:false)
+    sendEvent(name:'energyThisYear', value: null, displayed:false)
+    sendEvent(name:'energyLastYear', value: null, displayed:false)
+    sendEvent(name:'energy12Months', value: null, displayed:false)
 }
 // -------
 
@@ -485,6 +371,57 @@ def parse(String description) {
     def devicefanRate = daikinResp.get("f_rate", null)
     def devicefanDirection = daikinResp.get("f_dir", null)
     def deviceFanSupport = device.currentValue("fanAPISupport")
+    
+    //energy report
+    def deviceWeekEnergyHeat = daikinResp.get("week_heat", null)
+    def deviceWeekEnergyCool = daikinResp.get("week_cool", null)
+    
+    def deviceYear1EnergyHeat = daikinResp.get("curr_year_heat", null)
+    def deviceYear1EnergyCool = daikinResp.get("curr_year_cool", null)
+    def deviceYear2EnergyHeat = daikinResp.get("prev_year_heat", null)
+    def deviceYear2EnergyCool = daikinResp.get("prev_year_cool", null)
+    
+    // if heat is available, cool is as well
+    if(deviceWeekEnergyHeat){
+        //values are in thenths of a kWh
+        def deviceTodayEnergy = deviceWeekEnergyHeat.split('/')[0].toInteger() + deviceWeekEnergyCool.split('/')[0].toInteger()
+        def deviceYesterdayEnergy = deviceWeekEnergyHeat.split('/')[1].toInteger() + deviceWeekEnergyCool.split('/')[1].toInteger()
+        events.add(createEvent(name: "energyToday", value: deviceTodayEnergy/10))
+        events.add(createEvent(name: "energyYesterday", value: deviceYesterdayEnergy/10))
+    }
+    
+    // if heat for year 1 is available, all other year values are as well
+    if(deviceYear1EnergyHeat){
+        def y1h = deviceYear1EnergyHeat.split('/')
+        def y1c = deviceYear2EnergyCool.split('/')
+        def y2h = deviceYear2EnergyHeat.split('/')
+        def y2c = deviceYear2EnergyCool.split('/')
+        
+        def thisYearEnergy = 0.0
+        def lastYearEnergy = 0.0
+        
+        for(def i=0; i<12;i++){
+            thisYearEnergy += y1h[i].toInteger() + y1c[i].toInteger()
+            lastYearEnergy += y2h[i].toInteger() + y2c[i].toInteger()
+        }
+        
+        def twelveMonthEnergy = 0.0
+        def thisMonth = new Date().getMonth()
+        for(def i=thisMonth-11; i<=thisMonth;i++){
+            if(i >= 0){
+                twelveMonthEnergy += y1h[i].toInteger() + y1c[i].toInteger()
+            } else{ 
+                twelveMonthEnergy += y2h[i+12].toInteger() + y2c[i+12].toInteger()
+            }
+        }
+
+        //values are in thenths of a kWh
+        events.add(createEvent(name: "energyThisYear", value: thisYearEnergy/10))
+        events.add(createEvent(name: "energyLastYear", value: lastYearEnergy/10))
+        events.add(createEvent(name: "energy12Months", value: twelveMonthEnergy/10))
+    }
+    
+
     //  Get power info
     if (devicePower){
         // log.debug "pow: ${devicePower}"
@@ -560,7 +497,7 @@ private updateEvents(Map args){
     if (!mode){
         mode = device.currentValue("thermostatMode")
     } else {
-        events.add(sendEvent(name: "thermostatMode", value: mode))
+        events.add(sendEvent(name: "thermostatMode", value: mode))   
     }
     if (!temperature){
         temperature = device.currentValue("targetTemp")
@@ -605,8 +542,8 @@ private updateEvents(Map args){
         events.add(sendEvent(name: "switch", value: "on", displayed: false))
     }
 
-    if (updateDevice){
-        updateDaikinDevice(turnOff)
+    if (updateDevice){	
+	    runIn(1, 'updateDaikinDevice', [ data : turnOff])    
     }
 
 }
@@ -740,7 +677,7 @@ def setFanRate(def fanRate) {
 						break
 				}
 			}
-			updateDaikinDevice(false)
+			runIn(1, 'updateDaikinDevice', [ data : false])
 		} else {
 			sendEvent(name: "fanRate", value: "Not Supported")
 		}
@@ -776,7 +713,7 @@ def toggleFanDirection(String toggleDir){
         sendEvent(name: "fanDirection", value: "Off")
     }
     if (fanAPISupported()){
-        updateDaikinDevice(false)
+        runIn(1, 'updateDaikinDevice', [ data : false])
     } else {
         sendEvent(name: "fanDirection", value: "Not Supported")
     }
@@ -835,4 +772,3 @@ def fanAuto() {
     // TODO: handle 'setSchedule' command
 // }
 // -------
-
