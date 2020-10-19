@@ -1,6 +1,6 @@
 # Hubitat driver - Daikin WiFi Split System
 
-Add driver code to hub and add new device type Daikin WiFi Split System Hubitat.
+Add driver code from daikin-wifi-split-system-hubitat.groovy to hub and add new device type Daikin WiFi Split System Hubitat.
 
 Settings should be self-explanatory. Be careful using refresh interval 1 minute, its barely supported.
 
