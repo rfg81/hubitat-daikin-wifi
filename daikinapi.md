@@ -199,15 +199,22 @@ ret=OK,pow=1,mode=4,adv=,stemp=25.0,shum=0,dt1=25.0,dt2=M,dt3=22.0,dt4=25.0,dt5=
 ## More commands discovered
 
 /common/get_datetime
+
 the meaning is obvious and the response I got was:
 ret=OK,sta=2,cur=2016/7/7 21:23:28,reg=eu,dst=1,zone=313
+
 /aircon/get_scdltimer_info
+
 it seems to get informations about the tasks scheduled on the AC, I have no further informations on that at the moment, but the response I got without anything scheduled was:
 ret=OK,format=v1,f_detail=total#18;_en#1;_pow#1;_mode#1;_temp#4;_time#4;_vol#1;_dir#1;_humi#3;_spmd#2,scdl_num=3,scdl_per_day=6,en_scdltimer=1,active_no=1,scdl1_name=,scdl2_name=,scdl3_name=
+
 /aircon/get_scdltimer_body&target=1
+
 this seems to get detailed informations about a specific scheduled task, and the response I got was:
 ret=OK,format=v1,target=1,en_scdltimer=1,moc=0,tuc=0,wec=0,thc=0,frc=0,sac=0,suc=0
+
 /aircon/get_day_power_ex?days=2
+
 this command retrieves the power consumption (in 0.1 kWH) of the last 2 days, separated hour by hour starting from midnight and also separated for cooling and heating. The days variable can be set up to 7 for last 7 days. The response I got was:
 ret=OK,curr_day_heat=0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0,prev_1day_heat=0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0,curr_day_cool=0/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/0/2/2/2/2/0/0/0,prev_1day_cool=0/0/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/2/2/2/1/2/1/0
 /aircon/get_week_power_ex
