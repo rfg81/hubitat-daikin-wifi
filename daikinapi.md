@@ -23,8 +23,6 @@ Uri                | GET | POST | desc
 /aircon/set_target | | X | ?
 /aircon/get_week_power| X | | Provides weekly and today runtime information (in mn)
 /aircon/get_week_power_ex| X | | Energy consumption per day last 7 days in thenths of a kWh
-/aircon/get_week_power| X | | Provides weekly and today runtime information (in mn)
-/aircon/get_week_power_ex| X | | Energy consumption per day last 7 days in thenths of a kWh
 /aircon/get_year_power| X | | Provides yearly runtime information
 /aircon/get_year_power_ex| X | | Energy consumption each month this and last year in thenths of a kWh
 /aircon/get_program | X | | ?
