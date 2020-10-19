@@ -217,22 +217,33 @@ ret=OK,format=v1,target=1,en_scdltimer=1,moc=0,tuc=0,wec=0,thc=0,frc=0,sac=0,suc
 
 this command retrieves the power consumption (in 0.1 kWH) of the last 2 days, separated hour by hour starting from midnight and also separated for cooling and heating. The days variable can be set up to 7 for last 7 days. The response I got was:
 ret=OK,curr_day_heat=0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0,prev_1day_heat=0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0/0,curr_day_cool=0/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/0/2/2/2/2/0/0/0,prev_1day_cool=0/0/0/0/0/0/0/0/0/0/0/0/0/1/0/0/0/2/2/2/1/2/1/0
+
 /aircon/get_week_power_ex
+
 this command retrieves the power consumption (in 0.1 kWh) of the current and last week, separated day by day, the response I got was:
 ret=OK,s_dayw=4,week_heat=0/0/0/0/0/0/0/0/0/0/0/0/0/0,week_cool=10/11/3/9/10/16/11/3/9/6/6/0/0/0
+
 /aircon/get_year_power_ex
+
 this command retrieves the power consumption (in 0.1 kWh) of the current and last year, separated month by month, the response I got was:
 ret=OK,curr_year_heat=0/0/0/0/0/0/0/0/0/0/0/0,prev_year_heat=0/0/0/0/0/0/0/0/0/0/0/0,curr_year_cool=0/0/0/0/0/24/70/0/0/0/0/0,prev_year_cool=0/0/0/0/0/0/0/0/0/0/0/0
-I found other requests to set the operating mode of the AC (the application uses GET HTTP requests):
+
 /aircon/set_special_mode?en_streamer=0
+
 this command disables the ion streamer on the AC (or it enables substituting ?en_streamer=1). The response has the form:
 ret=OK,adv=13
 or
 ret=OK,adv=
 where '13' means that the streamer has been activated or '' means that it has been deactivated
+
 /aircon/set_special_mode?set_spmode=1&spmode_kind=1
+
 this command enables the power mode of the AC and this can be seen looking at the adv=2 return message (even in the get_control_info)
+
 /aircon/set_special_mode?set_spmode=1&spmode_kind=2
+
 this command enables the econo mode of the AV and this can bee seen looking at the adv=12 return message (even in the get_control_info)
+
 /aircon/set_special_mode?set_spmode=0&spmode_kind=1
+
 this command disables the power mode of the AC (I think it also works without the spmode_kind variable and also that it also disable the econo mode, but I haven't checked so far)
