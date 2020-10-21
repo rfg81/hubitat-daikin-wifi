@@ -1,6 +1,6 @@
 /**
  *  Daikin WiFi Split System Hubitat
- *  V 1.0 - 2020-10-19
+ *  V 1.0.1 - 2020-10-21
  *
  *  This is a port of the Smartthings daikin ac controller code by Ben Dews, the code is
  *  based on the modifications made by https://community.hubitat.com/u/tsaaek in this thread:
@@ -46,6 +46,7 @@
  *
  *  1.0     (2020-10-19) - Initial 1.0 Release. Forked from SmartThings Daikin WiFi Split System and added 
  *                         energy reports for today, yesterday, this year, last year and last 12 months.
+ *  1.0.1   (2020-10-21) - Fix bug with this year energy reporting, it was grabbing the cooling value from last year.
  *
  */
 
