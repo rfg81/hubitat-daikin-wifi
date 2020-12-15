@@ -1,6 +1,6 @@
 /**
  *  Daikin WiFi Split System Hubitat
- *  V 1.0.1 - 2020-10-21
+ *  V 1.0.2 - 2020-12-15
  *
  *  This is a port of the Smartthings daikin ac controller code by Ben Dews, the code is
  *  based on the modifications made by https://community.hubitat.com/u/tsaaek in this thread:
@@ -48,6 +48,9 @@
  *                         energy reports for today, yesterday, this year, last year and last 12 months.
  *  1.0.1   (2020-10-21) - Fix bug with this year energy reporting, it was grabbing the cooling value from last year.
  *
+ *  1.0.2   (2020-12-15) - Cleanup fan rate and mode setting, it now support auto, silent and level 1-5. 
+ *                         Save precferences once to get the new values in your thermostat dashboard widgets.
+ *
  */
 
 import groovy.transform.Field
@@ -64,8 +67,8 @@ import groovy.transform.Field
 ]
 
 @Field final Map DAIKIN_FAN_RATE = [
-    "A":    "Auto",
-    "B":    "Silence",
+    "A":    "auto",
+    "B":    "silent",
     "3":    "1",
     "4":    "2",
     "5":    "3",
@@ -109,7 +112,7 @@ metadata {
         command "tempUp"
         command "tempDown"
         command "fanRateAuto"
-        command "fanRateSilence"
+        command "fanRateSilent"
         command "fanDirectionVertical"
         command "fanDirectionHorizontal"
         command "setFanRate", ["number"]
@@ -150,7 +153,6 @@ private apiGet(def apiCommand) {
         path: apiCommand,
         headers: [Host:getHostAddress()]
     )
-
     return hubAction
 }
 
@@ -307,6 +309,10 @@ def updated() {
         // Start scheduled task
         startScheduledRefresh()
     }
+    
+    // this only need to be set once, but might be a select list in the future
+    sendEvent(name: "supportedThermostatFanModes", value: ["auto","silent","1","2","3","4","5"], displayed: false)
+
     state.updated = now()
 }
 
@@ -394,7 +400,7 @@ def parse(String description) {
     // if heat for year 1 is available, all other year values are as well
     if(deviceYear1EnergyHeat){
         def y1h = deviceYear1EnergyHeat.split('/')
-        def y1c = deviceYear2EnergyCool.split('/')
+        def y1c = deviceYear1EnergyCool.split('/')
         def y2h = deviceYear2EnergyHeat.split('/')
         def y2c = deviceYear2EnergyCool.split('/')
         
@@ -659,25 +665,29 @@ def setFanRate(def fanRate) {
     log.debug "Executing 'setFanRate' with ${fanRate}"
     def currFanRate = device.currentValue("fanRate")
     // Check that rate is different before setting.
-    // TODO: Clean messy IF statements
 	if (currFanRate != fanRate){
 		if (fanAPISupported()){
-			sendEvent(name: "supportedThermostatFanModes", value: ["auto", "on"], displayed: false) // We don't support circulate at this time
-			if (fanRate == 0){
-				sendEvent(name: "fanRate", value: "Auto")
-				sendEvent(name: "thermostatFanMode", value: "auto", displayed: false)
-			} else {
-				sendEvent(name: "fanRate", value: fanRate)
 				switch (fanRate) {
-					case "Auto":
-						sendEvent(name: "thermostatFanMode", value: "auto", displayed: false)
-						break
-
-					default: // all other modes indicate fan on
-						sendEvent(name: "thermostatFanMode", value: "on", displayed: false)
+                    case "silent":                  
+                    case "1":
+                    case "2":
+                    case "3":
+                    case "4":
+                    case "5":
+        				sendEvent(name: "fanRate", value: fanRate)
+                        sendEvent(name: "thermostatFanMode", value: fanRate, displayed: false)
+                        break
+                    
+                    case "auto":
+                    case "0":
+                        sendEvent(name: "fanRate", value: "auto")
+                        sendEvent(name: "thermostatFanMode", value: "auto", displayed: false)
+                        break
+                    
+					default: // all other modes indicate fan rate silent setting
+						sendEvent(name: "thermostatFanMode", value: "silent", displayed: false)
 						break
 				}
-			}
 			runIn(1, 'updateDaikinDevice', [ data : false])
 		} else {
 			sendEvent(name: "fanRate", value: "Not Supported")
@@ -687,12 +697,12 @@ def setFanRate(def fanRate) {
 
 def fanRateAuto(){
     log.debug "Executing 'fanRateAuto'"
-    setFanRate("Auto")
+    setFanRate("auto")
 }
 
-def fanRateSilence(){
-    log.debug "Executing 'fanRateSilence'"
-    setFanRate("Silence")
+def fanRateSilent(){
+    log.debug "Executing 'fanRateSilent'"
+    setFanRate("silent")
 }
 
 def toggleFanDirection(String toggleDir){
@@ -733,7 +743,7 @@ def fanDirectionVertical() {
 
 def fanOn() {
     log.debug "Executing 'fanOn'"
-    fanRateSilence() // Should this be made configurable to allow the user to select the default fan rate?
+    fanRateSilent() // Should this be made configurable to allow the user to select the default fan rate?
 }
 
 def fanAuto() {
@@ -748,8 +758,10 @@ def fanAuto() {
  }
 
  def setThermostatFanMode(String value) {
-    log.debug "Executing 'setThermostatFanMode' with fan mode $value"
-	switch(value){
+     // for some reason, there is a space inserted in the command here, trimming get the real command
+    String val = value.trim()
+    log.debug "Executing 'setThermostatFanMode' with fan mode '$val'"
+	switch(val){
 		case "auto":
 			fanAuto()
 			break
@@ -761,6 +773,15 @@ def fanAuto() {
 		case "circulate":
 			fanCirculate()
 			break
+        
+		case "silent":
+        case "1":
+        case "2":
+        case "3":
+        case "4":
+        case "5":
+            setFanRate(val)
+            break
 		
 		default:
 			log.warn "Unknown fan mode: $value"
