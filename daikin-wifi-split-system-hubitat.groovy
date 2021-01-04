@@ -469,6 +469,7 @@ def parse(String description) {
         // log.debug "f_rate: ${devicefanRate}"
         events.add(createEvent(name: "fanAPISupport", value: "true", displayed: false))
         events.add(createEvent(name: "fanRate", value: DAIKIN_FAN_RATE.get(devicefanRate)))
+        events.add(createEvent(name: "thermostatFanMode", value: DAIKIN_FAN_RATE.get(devicefanRate)))
     }
     //  Get current fan direction
     if (devicefanDirection){
