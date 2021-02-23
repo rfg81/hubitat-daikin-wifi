@@ -125,6 +125,8 @@ metadata {
         input("ipPort", "string", title:"Daikin WiFi Port (default: 80)", defaultValue:80, required:true, displayDuringSetup:true)
         input("refreshInterval", "enum", title: "Refresh Interval in minutes", defaultValue: "10", required:true, displayDuringSetup:true, options: ["1","5","10","15","30"])
         input("displayFahrenheit", "boolean", title: "Display Fahrenheit", defaultValue: false, displayDuringSetup:true)
+        /* 2021-02-19 - logDebug use */
+        input (name: "debugLogging", type: "bool", defaultValue: false, submitOnChange: true, title: "Enable debug logging\n<b>CAUTION:</b> a lot of log entries will be recorded!")			                    
     }
 
 }
@@ -137,7 +139,7 @@ private getHostAddress() {
 }
 
 private getDNI(String ipAddress, String port){
-    log.debug "Generating DNI"
+    logDebug "Generating DNI"
     String ipHex = ipAddress.tokenize( '.' ).collect {  String.format( '%02X', it.toInteger() ) }.join()
     String portHex = String.format( '%04X', port.toInteger() )
     String newDNI = ipHex + ":" + portHex
@@ -145,7 +147,7 @@ private getDNI(String ipAddress, String port){
 }
 
 private apiGet(def apiCommand) {
-    log.debug "Executing hubaction on " + getHostAddress() + apiCommand
+    logDebug "Executing hubaction on " + getHostAddress() + apiCommand
     sendEvent(name: "hubactionMode", value: "local")
 
     def hubAction = new hubitat.device.HubAction(
@@ -161,7 +163,7 @@ private roundHalf(Double num){
 }
 
 private convertTemp(Double temp, Boolean isFahrenheit){
-    log.debug "Converting ${temp}, Fahrenheit: ${isFahrenheit}"
+    logDebug "Converting ${temp}, Fahrenheit: ${isFahrenheit}"
     Double convertedTemp
     if (isFahrenheit) {
         convertedTemp = ((temp - 32) * 5) / 9
@@ -176,7 +178,7 @@ private convertTemp(Double temp, Boolean isFahrenheit){
 
 // Daikin Specific Private Functions -------
 private parseTemp(Double temp, String method){
-    log.debug "${method}-ing ${temp}"
+    logDebug "${method}-ing ${temp}"
     if (settings.displayFahrenheit.toBoolean()) {
         switch(method) {
             case "GET":
@@ -225,7 +227,7 @@ private updateDaikinDevice(Boolean turnOff = false){
     def currentfDir = device.currentState("fanDirection")?.value
     // Convert textual fan direction (e.g "3d") to Daikin Code (e.g "3")
     def currentfDirKey = DAIKIN_FAN_DIRECTION.find{ it.value == currentfDir }?.key
-    log.debug "${currentfDirKey}"
+    logDebug "${currentfDirKey}"
     
     // Get target temperature set in Smartthings
     def targetTemp = parseTemp(device.currentValue("targetTemp"), "SET")
@@ -274,14 +276,14 @@ private updateDaikinDevice(Boolean turnOff = false){
 
 // Utility Functions -------
 private startScheduledRefresh() {
-    log.debug "startScheduledRefresh()"
+    logDebug "startScheduledRefresh()"
     // Get minutes from settings
     def minutes = settings.refreshInterval?.toInteger()
     if (!minutes) {
         log.warn "Using default refresh interval: 10"
         minutes = 10
     }
-    log.debug "Scheduling polling task for every '${minutes}' minutes"
+    logDebug "Scheduling polling task for every '${minutes}' minutes"
     if (minutes == 1){
         runEvery1Minute(refresh)
     } else {
@@ -290,7 +292,7 @@ private startScheduledRefresh() {
 }
 
 def setDNI(){
-    log.debug "Setting DNI"
+    logDebug "Setting DNI"
     String ip = settings.ipAddress
     String port = settings.ipPort
     String newDNI = getDNI(ip, port)
@@ -298,7 +300,7 @@ def setDNI(){
 }
 
 def updated() {
-    log.debug "Updated with settings: ${settings}"
+    logDebug "Updated with settings: ${settings}"
     // Prevent function from running twice on save
     if (!state.updated || now() >= state.updated + 5000){
         // Unschedule existing tasks
@@ -317,12 +319,12 @@ def updated() {
 }
 
 def poll() {
-    log.debug "Executing poll(), unscheduling existing"
+    logDebug "Executing poll(), unscheduling existing"
     refresh()
 }
 
 def refresh() {
-    log.debug "Refreshing"
+    logDebug "Refreshing"
 	runIn(2, 'apiGet', [data:"/aircon/get_sensor_info"])
     
     runIn(4, 'apiGet', [overwrite : false, data : "/aircon/get_control_info"])
@@ -333,7 +335,7 @@ def refresh() {
 }
 
 def installed() {
-    log.debug "installed()"
+    logDebug "installed()"
     sendEvent(name:'heatingSetpoint', value: '18', displayed:false)
     sendEvent(name:'coolingSetpoint', value: '28', displayed:false)
     sendEvent(name:'temperature', value: null, displayed:false)
@@ -362,7 +364,7 @@ def parse(String description) {
     def body = msg.body
     def daikinResp = parseDaikinResp(body)
     // Debug Response
-    log.debug "Parsing Response: ${daikinResp}"
+    logDebug "Parsing Response: ${daikinResp}"
     // Custom definitions
     def events = []
     def turnedOff = false
@@ -431,7 +433,7 @@ def parse(String description) {
 
     //  Get power info
     if (devicePower){
-        // log.debug "pow: ${devicePower}"
+        // logDebug "pow: ${devicePower}"
         if (devicePower == "0") {
             turnedOff = true
             events.add(createEvent(name: "thermostatMode", value: "off"))
@@ -439,7 +441,7 @@ def parse(String description) {
     }
     //  Get mode info
     if (deviceMode){
-        // log.debug "mode: ${deviceMode}"
+        // logDebug "mode: ${deviceMode}"
         currMode = DAIKIN_MODES.get(deviceMode.toString())
         if (!turnedOff) {
             modeVal = currMode
@@ -448,37 +450,37 @@ def parse(String description) {
     }
     //  Get inside temperature sensor info
     if (deviceInsideTempSensor){
-        // log.debug "htemp: ${deviceInsideTempSensor}"
+        // logDebug "htemp: ${deviceInsideTempSensor}"
         String insideTemp = parseTemp(Double.parseDouble(deviceInsideTempSensor), "GET")
         events.add(createEvent(name: "temperature", value: insideTemp))
     }
     //  Get outside temperature sensor info
     if (deviceOutsideTempSensor){
-        // log.debug "otemp: ${deviceOutsideTempSensor}"
+        // logDebug "otemp: ${deviceOutsideTempSensor}"
         String outsideTemp = parseTemp(Double.parseDouble(deviceOutsideTempSensor), "GET")
         events.add(createEvent(name: "outsideTemp", value: outsideTemp))
     }
     //  Get currently set target temperature
     if (deviceTargetTemp){
-        // log.debug "stemp: ${deviceTargetTemp}"
+        // logDebug "stemp: ${deviceTargetTemp}"
         // Value of "M" is for modes that don't support temperature changes, make value null
         targetTempVal = deviceTargetTemp.isNumber() ? parseTemp(Double.parseDouble(deviceTargetTemp), "GET") : null
     }
     //  Get current fan rate
     if (devicefanRate){
-        // log.debug "f_rate: ${devicefanRate}"
+        // logDebug "f_rate: ${devicefanRate}"
         events.add(createEvent(name: "fanAPISupport", value: "true", displayed: false))
         events.add(createEvent(name: "fanRate", value: DAIKIN_FAN_RATE.get(devicefanRate)))
         events.add(createEvent(name: "thermostatFanMode", value: DAIKIN_FAN_RATE.get(devicefanRate)))
     }
     //  Get current fan direction
     if (devicefanDirection){
-        // log.debug "f_dir: ${devicefanDirection}"
+        // logDebug "f_dir: ${devicefanDirection}"
         events.add(createEvent(name: "fanDirection", value: DAIKIN_FAN_DIRECTION.get(devicefanDirection)))
     }
     // If device doesnt support API Fan functions
     if (deviceMode && !devicefanRate){
-        // log.debug "Fan support: False"
+        // logDebug "Fan support: False"
         events.add(createEvent(name: "fanAPISupport", value: "false", displayed: false))
     }
     
@@ -492,7 +494,7 @@ def parse(String description) {
 }
 
 private updateEvents(Map args){
-    log.debug "Executing 'updateEvents' with ${args.mode}, ${args.temperature} and ${args.updateDevice}"
+    logDebug "Executing 'updateEvents' with ${args.mode}, ${args.temperature} and ${args.updateDevice}"
     // Get args with default values
     def mode = args.get("mode", null)
     def temperature = args.get("temperature", null)
@@ -560,7 +562,7 @@ private updateEvents(Map args){
 
 // Temperature Functions
 def tempUp() {
-    log.debug "tempUp()"
+    logDebug "tempUp()"
     def step = 0.5
     def mode = device.currentValue("thermostatMode")
     def targetTemp = device.currentValue("targetTemp")
@@ -569,7 +571,7 @@ def tempUp() {
 }
 
 def tempDown() {
-    log.debug "tempDown()"
+    logDebug "tempDown()"
     def step = 0.5
     def mode = device.currentValue("thermostatMode")
     def targetTemp = device.currentValue("targetTemp")
@@ -578,7 +580,7 @@ def tempDown() {
 }
 
 def setThermostatMode(String newMode) {
-    log.debug "Executing 'setThermostatMode'"
+    logDebug "Executing 'setThermostatMode'"
     def currMode = device.currentValue("thermostatMode")
     if (currMode != newMode){
         updateEvents(mode: newMode, updateDevice: true)
@@ -587,17 +589,17 @@ def setThermostatMode(String newMode) {
 
 
 def setTemperature(Double value) {
-    log.debug "Executing 'setTemperature' with ${value}"
+    logDebug "Executing 'setTemperature' with ${value}"
     updateEvents(temperature: value, updateDevice: true)
 }
 
 def setHeatingSetpoint(Double value) {
-    log.debug "Executing 'setHeatingSetpoint' with ${value}"
+    logDebug "Executing 'setHeatingSetpoint' with ${value}"
     updateEvents(temperature: value, updateDevice: true)
 }
 
 def setCoolingSetpoint(Double value) {
-    log.debug "Executing 'setCoolingSetpoint' with ${value}"
+    logDebug "Executing 'setCoolingSetpoint' with ${value}"
     updateEvents(temperature: value, updateDevice: true)
 }
 // -------
@@ -605,31 +607,31 @@ def setCoolingSetpoint(Double value) {
 
 // Daikin "Modes" ----
 def auto(){
-    log.debug "Executing 'auto'"
+    logDebug "Executing 'auto'"
     updateEvents(mode: "auto", updateDevice: true)
 }
 
 def dry() {
-    log.debug "Executing 'dry'"
+    logDebug "Executing 'dry'"
     updateEvents(mode: "dry", updateDevice: true)
 }
 
 def cool() {
-    log.debug "Executing 'cool'"
+    logDebug "Executing 'cool'"
     // Set target temp to previously set Cool temperature
     def coolPoint = device.currentValue("coolingSetpoint")
     updateEvents(mode: "cool", temperature: coolPoint, updateDevice: true)
 }
 
 def heat() {
-    log.debug "Executing 'heat'"
+    logDebug "Executing 'heat'"
     // Set target temp to previously set Heat temperature
     def heatPoint = device.currentValue("heatingSetpoint")
     updateEvents(mode: "heat", temperature: heatPoint, updateDevice: true)
 }
 
 def fan() {
-    log.debug "Executing 'fan'"
+    logDebug "Executing 'fan'"
     updateEvents(mode: "fan", updateDevice: true)
 }
 // -------
@@ -637,13 +639,13 @@ def fan() {
 
 // Switch Functions ----
 def on(){
-    log.debug "Executing 'on'"
+    logDebug "Executing 'on'"
     def currMode = device.currentValue("currMode")
     updateEvents(mode: currMode, updateDevice: true)
 }
 
 def off() {
-    log.debug "Executing 'off'"
+    logDebug "Executing 'off'"
     updateEvents(mode: "off", updateDevice: true)
 }
 // -------
@@ -654,7 +656,7 @@ private fanAPISupported() {
     // Returns boolean based on whether API Fan actions are supported by the model
     String deviceFanSupport = device.currentValue("fanAPISupport")
     if (deviceFanSupport == "false"){
-        log.debug "Fan settings not supported on this model"
+        logDebug "Fan settings not supported on this model"
         sendEvent(name: "fanDirection", value: "Not Supported")
         return false
     } else {
@@ -663,7 +665,7 @@ private fanAPISupported() {
 }
 
 def setFanRate(def fanRate) {
-    log.debug "Executing 'setFanRate' with ${fanRate}"
+    logDebug "Executing 'setFanRate' with ${fanRate}"
     def currFanRate = device.currentValue("fanRate")
     // Check that rate is different before setting.
 	if (currFanRate != fanRate){
@@ -697,17 +699,17 @@ def setFanRate(def fanRate) {
 }
 
 def fanRateAuto(){
-    log.debug "Executing 'fanRateAuto'"
+    logDebug "Executing 'fanRateAuto'"
     setFanRate("auto")
 }
 
 def fanRateSilent(){
-    log.debug "Executing 'fanRateSilent'"
+    logDebug "Executing 'fanRateSilent'"
     setFanRate("silent")
 }
 
 def toggleFanDirection(String toggleDir){
-    log.debug "Executing 'toggleFanDirection' with ${toggleDir}"
+    logDebug "Executing 'toggleFanDirection' with ${toggleDir}"
     String currentDir = device.currentValue("fanDirection")
     
     if (currentDir == "Off"){
@@ -733,22 +735,22 @@ def toggleFanDirection(String toggleDir){
 }
 
 def fanDirectionHorizontal() {
-    log.debug "Executing 'fanDirectionHorizontal'"
+    logDebug "Executing 'fanDirectionHorizontal'"
     toggleFanDirection("Horizontal") 
 }
 
 def fanDirectionVertical() {
-    log.debug "Executing 'fanDirectionVertical'"
+    logDebug "Executing 'fanDirectionVertical'"
     toggleFanDirection("Vertical") 
 }
 
 def fanOn() {
-    log.debug "Executing 'fanOn'"
+    logDebug "Executing 'fanOn'"
     fanRateSilent() // Should this be made configurable to allow the user to select the default fan rate?
 }
 
 def fanAuto() {
-    log.debug "Executing 'fanAuto'"
+    logDebug "Executing 'fanAuto'"
 	fanRateAuto()
 }
 
@@ -761,7 +763,7 @@ def fanAuto() {
  def setThermostatFanMode(String value) {
      // for some reason, there is a space inserted in the command here, trimming get the real command
     String val = value.trim()
-    log.debug "Executing 'setThermostatFanMode' with fan mode '$val'"
+    logDebug "Executing 'setThermostatFanMode' with fan mode '$val'"
 	switch(val){
 		case "auto":
 			fanAuto()
@@ -791,7 +793,14 @@ def fanAuto() {
  }
 
 // def setSchedule() {
-    // log.debug "Executing 'setSchedule'"
+    // logDebug "Executing 'setSchedule'"
     // TODO: handle 'setSchedule' command
 // }
 // -------
+
+//
+// Logging stuff - 2021-02-19
+//
+def logDebug (message) { if (debugLogging) log.debug (message) }
+def logInfo  (message) { log.info (message) }
+def logWarn  (message) { log.warn (message) }
