@@ -1,6 +1,6 @@
 /**
  *  Daikin WiFi Split System Hubitat
- *  V 1.0.2 - 2020-12-15
+ *  V 1.0.3 - 2021-04-30
  *
  *  This is a port of the Smartthings daikin ac controller code by Ben Dews, the code is
  *  based on the modifications made by https://community.hubitat.com/u/tsaaek in this thread:
@@ -51,6 +51,8 @@
  *  1.0.2   (2020-12-15) - Cleanup fan rate and mode setting, it now support auto, silent and level 1-5. 
  *                         Save precferences once to get the new values in your thermostat dashboard widgets.
  *
+ *  1.0.3   (2021-04-30) - Bug fixes for fan rate settings, the setting get applied more consistently if sending 
+ *                         it as string instead of a number.
  */
 
 import groovy.transform.Field
@@ -470,8 +472,8 @@ def parse(String description) {
     if (devicefanRate){
         // logDebug "f_rate: ${devicefanRate}"
         events.add(createEvent(name: "fanAPISupport", value: "true", displayed: false))
-        events.add(createEvent(name: "fanRate", value: DAIKIN_FAN_RATE.get(devicefanRate)))
-        events.add(createEvent(name: "thermostatFanMode", value: DAIKIN_FAN_RATE.get(devicefanRate)))
+        events.add(createEvent(name: "fanRate", value: DAIKIN_FAN_RATE.get(devicefanRate).toString()))
+        events.add(createEvent(name: "thermostatFanMode", value: DAIKIN_FAN_RATE.get(devicefanRate).toString()))
     }
     //  Get current fan direction
     if (devicefanDirection){
@@ -677,8 +679,8 @@ def setFanRate(def fanRate) {
                     case "3":
                     case "4":
                     case "5":
-        				sendEvent(name: "fanRate", value: fanRate)
-                        sendEvent(name: "thermostatFanMode", value: fanRate, displayed: false)
+        				sendEvent(name: "fanRate", value: fanRate.toString())
+                        sendEvent(name: "thermostatFanMode", value: fanRate.toString(), displayed: false)
                         break
                     
                     case "auto":
