@@ -11,6 +11,10 @@
  *  
  *  There is more information about the DAikin API in the repo this file came from, see daikinapi.md
  *
+ *  NOTE: You need a B series wifi module to use this integration. The module series can be found in
+ *  the model number, it should be BRP069B4x, where the letter after BRP069 denote series. If the 
+ *  module number is BRP069C4x, you have the new cloud connected module which will not respond to
+ *  any of the commands sent by this integration.
  *  
  *  Here is some legal mumbo-jumbo everyone that throws a piece of code on the internet is 
  *  overly fond of including, even though noone actually gives a crap as long as their 
