@@ -1,6 +1,6 @@
 /**
  *  Daikin WiFi Split System Hubitat
- *  V 1.0.3 - 2021-04-30
+ *  V 1.0.4 - 2024-06-26
  *
  *  This is a port of the Smartthings daikin ac controller code by Ben Dews, the code is
  *  based on the modifications made by https://community.hubitat.com/u/tsaaek in this thread:
@@ -57,9 +57,12 @@
  *
  *  1.0.3   (2021-04-30) - Bug fixes for fan rate settings, the setting get applied more consistently if sending 
  *                         it as string instead of a number.
+ *
+ *  1.0.4   (2024-06-26) - Reformatted the supportedThermostatModes and supportedThermostatFanModes JSON_OBJECT attributes so that they work properly with Hubitat 2.3.3 and later
  */
 
 import groovy.transform.Field
+import groovy.json.JsonOutput
 
 @Field final Map DAIKIN_MODES = [
     "0":    "auto",
@@ -112,6 +115,8 @@ metadata {
         attribute "energyThisYear", "number"
         attribute "energyLastYear", "number"
         attribute "energy12Months", "number"
+        attribute "supportedThermostatFanModes", "JSON_OBJECT"
+        attribute "supportedThermostatModes", "JSON_OBJECT"
         
         command "fan"
         command "dry"
@@ -462,8 +467,8 @@ def parse(String description) {
     }
     //  Get outside temperature sensor info
     if (deviceOutsideTempSensor){
-        // logDebug "otemp: ${deviceOutsideTempSensor}"
-        String outsideTemp = parseTemp(Double.parseDouble(deviceOutsideTempSensor), "GET")
+        //logDebug "otemp: ${deviceOutsideTempSensor}"
+        String outsideTemp = deviceOutsideTempSensor.isNumber() ? parseTemp(Double.parseDouble(deviceOutsideTempSensor), "GET") : null
         events.add(createEvent(name: "outsideTemp", value: outsideTemp))
     }
     //  Get currently set target temperature
@@ -593,6 +598,17 @@ def setThermostatMode(String newMode) {
     }
 }
 
+def setSupportedThermostatFanModes(fanModes) {
+    logDebug "setSupportedThermostatFanModes(${fanModes}) was called"
+	// (auto, circulate, on)
+	sendEvent(name: "supportedThermostatFanModes", value: fanModes)
+}
+
+def setSupportedThermostatModes(modes) {
+    logDebug "setSupportedThermostatModes(${modes}) was called"
+	// (auto, cool, emergency heat, heat, off)
+	sendEvent(name: "supportedThermostatModes", value: modes)
+}
 
 def setTemperature(Double value) {
     logDebug "Executing 'setTemperature' with ${value}"
@@ -609,7 +625,6 @@ def setCoolingSetpoint(Double value) {
     updateEvents(temperature: value, updateDevice: true)
 }
 // -------
-
 
 // Daikin "Modes" ----
 def auto(){
